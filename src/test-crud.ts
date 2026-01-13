@@ -207,6 +207,94 @@ async function runTests() {
     fail('Create + Delete cycle', getErrorMessage(error));
   }
 
+  // ========================================
+  // TAG CRUD TESTS
+  // ========================================
+  log('\n' + '='.repeat(50));
+  log('\nTesting Tag CRUD Operations\n');
+
+  let createdTagId: number | null = null;
+  const testTagName = `[TEST] Tag ${Date.now()}`;
+
+  // Test 8: List tags
+  try {
+    log('Testing LIST tags...');
+    const tags = await api.getTags(workspaceId);
+    pass('List tags', `Found ${tags.length} tag(s)`);
+  } catch (error: unknown) {
+    fail('List tags', getErrorMessage(error));
+  }
+
+  // Test 9: Create tag
+  try {
+    log('\nTesting CREATE tag...');
+    const tag = await api.createTag(workspaceId, testTagName);
+    createdTagId = tag.id;
+
+    if (!tag.id) {
+      fail('Create tag', 'No ID returned');
+    } else if (tag.name !== testTagName) {
+      fail('Create tag', `Name mismatch: expected "${testTagName}", got "${tag.name}"`);
+    } else {
+      pass('Create tag', `Created tag ID ${tag.id} with name "${tag.name}"`);
+    }
+  } catch (error: unknown) {
+    fail('Create tag', getErrorMessage(error));
+  }
+
+  // Test 10: Update tag (rename)
+  if (createdTagId) {
+    try {
+      log('\nTesting UPDATE tag...');
+      const newName = `${testTagName} - RENAMED`;
+      const tag = await api.updateTag(workspaceId, createdTagId, newName);
+
+      if (tag.name !== newName) {
+        fail('Update tag', `Name not updated: expected "${newName}", got "${tag.name}"`);
+      } else {
+        pass('Update tag', `Tag renamed to "${tag.name}"`);
+      }
+    } catch (error: unknown) {
+      fail('Update tag', getErrorMessage(error));
+    }
+  }
+
+  // Test 11: Delete tag
+  if (createdTagId) {
+    try {
+      log('\nTesting DELETE tag...');
+      await api.deleteTag(workspaceId, createdTagId);
+
+      // Verify it's deleted by checking the tags list
+      const tags = await api.getTags(workspaceId);
+      const stillExists = tags.some(t => t.id === createdTagId);
+
+      if (stillExists) {
+        fail('Delete tag', 'Tag still exists after deletion');
+      } else {
+        pass('Delete tag', `Tag ${createdTagId} deleted successfully`);
+      }
+    } catch (error: unknown) {
+      fail('Delete tag', getErrorMessage(error));
+    }
+  }
+
+  // Test 12: Create tag with whitespace (should be trimmed by handler, but API accepts as-is)
+  try {
+    log('\nTesting CREATE tag with edge cases...');
+    const edgeTagName = `  [TEST] Whitespace Tag ${Date.now()}  `;
+    const tag = await api.createTag(workspaceId, edgeTagName);
+
+    // Note: The API may or may not trim - we just verify it accepts the request
+    pass('Create tag with whitespace', `Created tag "${tag.name}" (ID ${tag.id})`);
+
+    // Clean up
+    await api.deleteTag(workspaceId, tag.id);
+    log('   Cleaned up whitespace test tag');
+  } catch (error: unknown) {
+    fail('Create tag with whitespace', getErrorMessage(error));
+  }
+
   // Summary
   log('\n' + '='.repeat(50));
   const passed = results.filter(r => r.passed).length;

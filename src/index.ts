@@ -538,7 +538,80 @@ const tools: Tool[] = [
       }
     },
   },
-  
+
+  // Tag management
+  {
+    name: 'toggl_list_tags',
+    description: 'List all tags for a workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspace_id: {
+          type: 'number',
+          description: 'Workspace ID (uses default if not provided)'
+        }
+      }
+    },
+  },
+  {
+    name: 'toggl_create_tag',
+    description: 'Create a new tag in a workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Name of the tag to create'
+        },
+        workspace_id: {
+          type: 'number',
+          description: 'Workspace ID (uses default if not provided)'
+        }
+      },
+      required: ['name']
+    },
+  },
+  {
+    name: 'toggl_update_tag',
+    description: 'Rename an existing tag',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tag_id: {
+          type: 'number',
+          description: 'ID of the tag to update'
+        },
+        name: {
+          type: 'string',
+          description: 'New name for the tag'
+        },
+        workspace_id: {
+          type: 'number',
+          description: 'Workspace ID (uses default if not provided)'
+        }
+      },
+      required: ['tag_id', 'name']
+    },
+  },
+  {
+    name: 'toggl_delete_tag',
+    description: 'Delete a tag from a workspace',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tag_id: {
+          type: 'number',
+          description: 'ID of the tag to delete'
+        },
+        workspace_id: {
+          type: 'number',
+          description: 'Workspace ID (uses default if not provided)'
+        }
+      },
+      required: ['tag_id']
+    },
+  },
+
   // Cache management
   {
     name: 'toggl_warm_cache',
@@ -981,7 +1054,80 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }))
         });
       }
-      
+
+      // Tag management
+      case 'toggl_list_tags': {
+        await ensureCache();
+        const workspaceId = requireWorkspaceId(args?.workspace_id);
+
+        const tags = await cache.getTags(workspaceId);
+
+        return jsonResponse({
+          workspace_id: workspaceId,
+          count: tags.length,
+          tags: tags.map(t => ({
+            id: t.id,
+            name: t.name
+          }))
+        });
+      }
+
+      case 'toggl_create_tag': {
+        const workspaceId = requireWorkspaceId(args?.workspace_id);
+
+        if (!isString(args?.name) || args.name.trim() === '') {
+          throw new Error('name is required and must be a non-empty string');
+        }
+
+        const tag = await api.createTag(workspaceId, args.name.trim());
+
+        return jsonResponse({
+          success: true,
+          message: `Tag "${tag.name}" created`,
+          tag: {
+            id: tag.id,
+            name: tag.name
+          }
+        });
+      }
+
+      case 'toggl_update_tag': {
+        const workspaceId = requireWorkspaceId(args?.workspace_id);
+
+        if (!isPositiveInteger(args?.tag_id)) {
+          throw new Error('tag_id must be a positive integer');
+        }
+        if (!isString(args?.name) || args.name.trim() === '') {
+          throw new Error('name is required and must be a non-empty string');
+        }
+
+        const tag = await api.updateTag(workspaceId, args.tag_id, args.name.trim());
+
+        return jsonResponse({
+          success: true,
+          message: `Tag renamed to "${tag.name}"`,
+          tag: {
+            id: tag.id,
+            name: tag.name
+          }
+        });
+      }
+
+      case 'toggl_delete_tag': {
+        const workspaceId = requireWorkspaceId(args?.workspace_id);
+
+        if (!isPositiveInteger(args?.tag_id)) {
+          throw new Error('tag_id must be a positive integer');
+        }
+
+        await api.deleteTag(workspaceId, args.tag_id);
+
+        return jsonResponse({
+          success: true,
+          message: `Tag ${args.tag_id} deleted`
+        });
+      }
+
       // Cache management
       case 'toggl_warm_cache': {
         const workspaceId = isPositiveInteger(args?.workspace_id) ? args.workspace_id : defaultWorkspaceId;

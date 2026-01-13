@@ -74,12 +74,17 @@ export class TogglAPI {
           throw new Error(`Toggl API error (${response.status}): ${text}`);
         }
         
-        // Handle 204 No Content
+        // Handle 204 No Content or empty body (e.g., DELETE responses)
         if (response.status === 204) {
           return {} as T;
         }
-        
-        return await response.json() as T;
+
+        const text = await response.text();
+        if (!text || text.length === 0) {
+          return {} as T;
+        }
+
+        return JSON.parse(text) as T;
       } catch (error) {
         if (i === retries - 1) throw error;
         // Exponential backoff
@@ -163,6 +168,18 @@ export class TogglAPI {
   
   async getTag(workspaceId: number, tagId: number): Promise<Tag> {
     return this.request<Tag>('GET', `/workspaces/${workspaceId}/tags/${tagId}`);
+  }
+
+  async createTag(workspaceId: number, name: string): Promise<Tag> {
+    return this.request<Tag>('POST', `/workspaces/${workspaceId}/tags`, { name });
+  }
+
+  async updateTag(workspaceId: number, tagId: number, name: string): Promise<Tag> {
+    return this.request<Tag>('PUT', `/workspaces/${workspaceId}/tags/${tagId}`, { name });
+  }
+
+  async deleteTag(workspaceId: number, tagId: number): Promise<void> {
+    await this.request<void>('DELETE', `/workspaces/${workspaceId}/tags/${tagId}`);
   }
   
   // Time entry methods
